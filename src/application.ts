@@ -1,4 +1,6 @@
-import http from "node:http";
+import http, { IncomingMessage, ServerResponse } from "node:http";
+import { extendRequest } from "./request.js";
+import { extendResponse } from "./response.js";
 
 export class Application {
   private server = http.createServer((req, res) =>
@@ -9,9 +11,14 @@ export class Application {
     this.server.listen(port, callback);
   }
 
-  private handleRequest(req: any, res: any) {
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/plain");
-    res.end("Hello from my framework!");
+  private handleRequest(req: IncomingMessage, res: ServerResponse) {
+    const request = extendRequest(req);
+    const response = extendResponse(res);
+
+    response.status(200).json({
+      message: "Hello from my framework",
+      path: request.path,
+      query: request.query,
+    });
   }
 }
