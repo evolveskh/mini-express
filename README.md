@@ -15,8 +15,8 @@ A minimal, high-performance web framework for Node.js built from first principle
 
 - [x] **Phase 1.1**: Project Scaffolding & Tooling
 - [x] **Phase 1.2**: Core Application Engine (HTTP Wrapper)
-- [ ] **Phase 1.3**: Custom Request & Response Objects
-- [ ] **Phase 2**: Routing Engine (Regex matching & Params)
+- [x] **Phase 1.3**: Custom Request & Response Objects
+- [x] **Phase 2**: Routing Engine (Regex matching & Params)
 - [ ] **Phase 3**: Middleware Pipeline (The `next()` pattern)
 - [ ] **Phase 4**: Advanced Routing (Sub-routers)
 - [ ] **Phase 5**: Built-in Body Parsing
@@ -40,9 +40,22 @@ npm install
 ### Simple Example
 
 ```typescript
-import miniExpress from "./src/index.js";
+import miniExpress from "mini-express";
 
 const app = miniExpress();
+
+// 1. Basic route
+app.get("/hello", (req, res) => {
+  res.status(200).json({ message: "Hello world route!" });
+});
+
+// 2. Dynamic route parameters
+app.get("/users/:id", (req, res) => {
+  res.status(200).json({ 
+    user: req.params.id,
+    query: req.query // Automatically parsed!
+  });
+});
 
 app.listen(3000, () => {
   console.log("Server running at http://localhost:3000");

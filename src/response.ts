@@ -6,7 +6,7 @@ export function extendResponse(res: ServerResponse): MinResponse {
 
   customRes.status = function (code: number) {
     this.statusCode = code;
-    return this; // 👈 This is what allows res.status(200).json(...)
+    return this;
   };
 
   customRes.json = function (data: unknown) {
