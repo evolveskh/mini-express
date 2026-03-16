@@ -6,7 +6,7 @@ interface Route {
   path: string;
   keys: string[];
   regex: RegExp;
-  handler: RequestHandler;
+  handlers: RequestHandler[];
 }
 
 export class Router {
@@ -16,29 +16,29 @@ export class Router {
   private addRoute(
     method: HttpMethod | "*",
     path: string,
-    handler: RequestHandler
+    handlers: RequestHandler[]
   ) {
     const { regex, keys } = pathToRegex(path);
-    this.routes.push({ method, path, keys, regex, handler });
+    this.routes.push({ method, path, keys, regex, handlers });
   }
 
-  get(path: string, handler: RequestHandler) {
-    this.addRoute("GET", path, handler);
+  get(path: string, ...handlers: RequestHandler[]) {
+    this.addRoute("GET", path, handlers);
   }
 
-  post(path: string, handler: RequestHandler) {
-    this.addRoute("POST", path, handler);
+  post(path: string, ...handlers: RequestHandler[]) {
+    this.addRoute("POST", path, handlers);
   }
 
-  put(path: string, handler: RequestHandler) {
-    this.addRoute("PUT", path, handler);
+  put(path: string, ...handlers: RequestHandler[]) {
+    this.addRoute("PUT", path, handlers);
   }
 
-  delete(path: string, handler: RequestHandler) {
-    this.addRoute("DELETE", path, handler);
+  delete(path: string, ...handlers: RequestHandler[]) {
+    this.addRoute("DELETE", path, handlers);
   }
 
-  patch(path: string, handler: RequestHandler) {
-    this.addRoute("PATCH", path, handler);
+  patch(path: string, ...handlers: RequestHandler[]) {
+    this.addRoute("PATCH", path, handlers);
   }
 }
