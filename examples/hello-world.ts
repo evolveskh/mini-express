@@ -3,39 +3,32 @@ import { MinRequest, MinResponse, NextFunction } from "../src/types.js";
 
 const app = miniExpress();
 
-// 1. GLOBAL MIDDLEWARE: Runs on every single request
-app.use((req: MinRequest, res: MinResponse, next: NextFunction) => {
-  console.log(`[Log] ${req.method} ${req.path}`);
-  // Pass control to the next middleware in the pipeline
-  next(); 
+// ── GLOBAL MIDDLEWARE ─────────────────────────────────────────────────────────
+app.use((_req: MinRequest, _res: MinResponse, next: NextFunction) => {
+  console.log(`[Log] ${_req.method} ${_req.path}`);
+  next();
 });
 
-// 2. ROUTE-SPECIFIC MIDDLEWARE (Reusable)
+// ── ROUTE-SPECIFIC MIDDLEWARE ─────────────────────────────────────────────────
 const requireAuth = (req: MinRequest, res: MinResponse, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
+  if (!req.headers.authorization) {
     res.status(401).json({ error: "Missing authorization header" });
-    // Note: We don't call next(), so the pipeline stops here.
     return;
   }
   next();
 };
 
-app.get("/hello", (req: MinRequest, res: MinResponse) => {
+// ── BASIC ROUTES ──────────────────────────────────────────────────────────────
+app.get("/hello", (_req: MinRequest, res: MinResponse) => {
   res.status(200).json({ message: "Hello world route!" });
 });
 
-app.get("/users", (req: MinRequest, res: MinResponse) => {
+app.get("/users", (_req: MinRequest, res: MinResponse) => {
   res.status(200).json({ users: [{ name: "madonathy" }] });
 });
 
-// Using the route-specific middleware
-app.get("/secret", requireAuth, (req: MinRequest, res: MinResponse) => {
+app.get("/secret", requireAuth, (_req: MinRequest, res: MinResponse) => {
   res.status(200).json({ message: "You saw the secret!" });
-});
-
-app.get("/welcome", (req: MinRequest, res: MinResponse) => {
-  res.status(200).json({ message: "welcome to our website" });
 });
 
 app.get("/users/:id/posts/:postId", (req: MinRequest, res: MinResponse) => {
@@ -46,28 +39,52 @@ app.get("/users/:id/posts/:postId", (req: MinRequest, res: MinResponse) => {
   });
 });
 
-// 3. THROWING ERROR: To test the error handler
-app.get("/error", (req: MinRequest, res: MinResponse, next: NextFunction) => {
-  // Simulate something going wrong
-  const err = new Error("Database connection failed");
-  next(err); // Passing an argument means "skip to the error handler!"
+// ── PHASE 4: SUB-ROUTER ───────────────────────────────────────────────────────
+const productsRouter = miniExpress.Router();
+
+productsRouter.get("/", (_req: MinRequest, res: MinResponse) => {
+  res.json({ products: ["widget", "gadget"] });
 });
 
-// 4. GLOBAL ERROR HANDLER (4 Arguments: err, req, res, next)
-// Because it has 4 arguments, the dispatcher recognizes it as an Error Handler.
-app.use((err: any, req: MinRequest, res: MinResponse, next: NextFunction) => {
-  console.error("🔥 Error caught by global handler:", err.message);
-  res.status(500).json({ 
-    error: "Internal Server Error",
-    details: err.message
-  });
+productsRouter.get("/:id", (req: MinRequest, res: MinResponse) => {
+  res.json({ product: req.params.id });
+});
+
+app.use("/products", productsRouter);
+// GET /products     → list products
+// GET /products/42  → { product: "42" }
+
+// ── PHASE 4: ROUTE CHAINING ───────────────────────────────────────────────────
+app
+  .route("/items")
+  .get((_req: MinRequest, res: MinResponse) => res.json({ method: "GET", items: [] }))
+  .post((_req: MinRequest, res: MinResponse) => res.json({ method: "POST", created: true }));
+
+// ── PHASE 4: WILDCARD ─────────────────────────────────────────────────────────
+app.get("/files/*", (req: MinRequest, res: MinResponse) => {
+  res.json({ file: req.path.replace("/files/", "") });
+});
+
+// ── ERROR ROUTES ──────────────────────────────────────────────────────────────
+app.get("/error", (_req: MinRequest, _res: MinResponse, next: NextFunction) => {
+  next(new Error("Database connection failed"));
+});
+
+// ── GLOBAL ERROR HANDLER ──────────────────────────────────────────────────────
+app.use((err: unknown, _req: MinRequest, res: MinResponse, _next: NextFunction) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error("Error caught by global handler:", message);
+  res.status(500).json({ error: "Internal Server Error", details: message });
 });
 
 app.listen(3000, () => {
   console.log("Server is running on http://localhost:3000");
-  console.log("🚀 Try these endpoints:");
-  console.log("  GET http://localhost:3000/hello");
-  console.log("  GET http://localhost:3000/secret (will fail without auth header)");
-  console.log("  GET http://localhost:3000/error (will trigger global error handler)");
-  console.log("  GET http://localhost:3000/xyz (will fall through to 404 handler)");
+  console.log("Try these endpoints:");
+  console.log("  GET  /hello");
+  console.log("  GET  /products          (sub-router)");
+  console.log("  GET  /products/42       (sub-router with params)");
+  console.log("  GET  /items             (route chain)");
+  console.log("  POST /items             (route chain)");
+  console.log("  GET  /files/a/b/c.txt  (wildcard)");
+  console.log("  GET  /error             (triggers error handler)");
 });

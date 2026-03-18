@@ -2,20 +2,12 @@ import http, { IncomingMessage, ServerResponse } from "node:http";
 import { extendRequest } from "./request.js";
 import { extendResponse } from "./response.js";
 import { Router } from "./router.js";
-import { Middleware, ErrorHandler, RequestHandler } from "./types.js";
+import { Middleware, ErrorHandler, RequestHandler, MinRequest, MinResponse } from "./types.js";
 
 export class Application extends Router {
   private server = http.createServer((req, res) =>
     this.handleRequest(req, res)
   );
-
-  // Store global app-level middleware (both normal and error handlers)
-  private globalMiddlewares: Middleware[] = [];
-
-  // Register a global middleware
-  use(middleware: Middleware) {
-    this.globalMiddlewares.push(middleware);
-  }
 
   listen(port: number, callback?: () => void) {
     this.server.listen(port, callback);
@@ -25,50 +17,18 @@ export class Application extends Router {
     const request = extendRequest(req);
     const response = extendResponse(res);
 
-    let matchedParams: Record<string, string> = {};
+    // Build the flat pipeline from the middleware stack + matched route
+    const pipeline: Middleware[] = this.buildPipeline(request, response);
 
-    // 1. Find the matching route
-    const matchedRoute = this.routes.find((route) => {
-      const methodMatched =
-        route.method === "*" || route.method === request.method;
-
-      if (!methodMatched) return false;
-
-      const match = route.regex.exec(request.path);
-
-      if (match) {
-        route.keys.forEach((key, index) => {
-          matchedParams[key] = match[index + 1];
-        });
-        return true;
-      }
-
-      return false;
-    });
-
-    if (matchedRoute) {
-      request.params = matchedParams;
-    }
-
-    // 2. Combine global middleware with the specific route's handlers
-    const pipeline: Middleware[] = [
-      ...this.globalMiddlewares,
-      ...(matchedRoute ? matchedRoute.handlers : []),
-    ];
-
-    // 3. The Dispatch Engine
     let index = 0;
 
     const dispatch = (err?: unknown) => {
-      // If we reach the end of the pipeline
       if (index >= pipeline.length) {
         if (err) {
-          // Uncaught error reached the end
-          response.status(500).json({ 
-            error: err instanceof Error ? err.message : String(err) 
+          response.status(500).json({
+            error: err instanceof Error ? err.message : String(err),
           });
-        } else if (!matchedRoute) {
-          // No route matched, and no middleware sent a response
+        } else if (!response.writableEnded) {
           response.status(404).json({
             error: "Not found",
             path: request.path,
@@ -78,34 +38,102 @@ export class Application extends Router {
         return;
       }
 
-      // Get current middleware and increment index for the next call
       const currentMiddleware = pipeline[index++];
 
       try {
         if (err) {
-          // ERROR MODE: We are looking for an Error Handler (4 arguments)
           if (currentMiddleware.length === 4) {
             (currentMiddleware as ErrorHandler)(err, request, response, dispatch);
           } else {
-            // Not an error handler, skip to the next
             dispatch(err);
           }
         } else {
-          // NORMAL MODE: We skip error handlers
           if (currentMiddleware.length === 4) {
             dispatch();
           } else {
-            // Fire normal request handler
             (currentMiddleware as RequestHandler)(request, response, dispatch);
           }
         }
       } catch (syncErr) {
-        // Catch synchronous errors automatically and pass into error mode
         dispatch(syncErr);
       }
     };
 
-    // Start the assembly line!
     dispatch();
   }
+
+  /**
+   * Walk the middleware stack (which can contain plain middleware or mounted
+   * Routers), expand sub-routers into their constituent handlers, then append
+   * the matched route's handlers.
+   */
+  private buildPipeline(request: MinRequest, _response: MinResponse): Middleware[] {
+    const pipeline: Middleware[] = [];
+    let routeMatched = false;
+
+    // Recursively expand a Router at a given mount prefix
+    const expandRouter = (router: Router, mountPrefix: string) => {
+      for (const entry of router.getMiddlewareStack()) {
+        const entryPrefix = joinPrefix(mountPrefix, entry.prefix);
+
+        if (entry.handler instanceof Router) {
+          // Only expand sub-router if the request path starts with the prefix
+          if (pathStartsWith(request.path, entryPrefix)) {
+            expandRouter(entry.handler, entryPrefix);
+          }
+        } else {
+          // Plain middleware — include if prefix matches (or no prefix)
+          if (entry.prefix === null || pathStartsWith(request.path, entryPrefix)) {
+            pipeline.push(entry.handler);
+          }
+        }
+      }
+
+      // Try matching routes within this router (strip the mount prefix first)
+      if (!routeMatched) {
+        const localPath = stripPrefix(request.path, mountPrefix);
+
+        for (const route of router.getRoutes()) {
+          const methodOk = route.method === "*" || route.method === request.method;
+          if (!methodOk) continue;
+
+          const match = route.regex.exec(localPath);
+          if (match) {
+            // Extract params
+            route.keys.forEach((key, i) => {
+              if (key !== "*") request.params[key] = match[i + 1]!;
+            });
+            pipeline.push(...route.handlers);
+            routeMatched = true;
+            break;
+          }
+        }
+      }
+    };
+
+    expandRouter(this, "");
+
+    return pipeline;
+  }
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function joinPrefix(base: string, segment: string | null): string {
+  if (!segment) return base;
+  // Normalise: no trailing slash on base, leading slash on segment
+  const b = base.replace(/\/$/, "");
+  const s = segment.startsWith("/") ? segment : `/${segment}`;
+  return b + s;
+}
+
+function pathStartsWith(path: string, prefix: string): boolean {
+  if (!prefix || prefix === "/") return true;
+  return path === prefix || path.startsWith(prefix + "/");
+}
+
+function stripPrefix(path: string, prefix: string): string {
+  if (!prefix || prefix === "/") return path;
+  const stripped = path.slice(prefix.length);
+  return stripped.startsWith("/") ? stripped : `/${stripped}`;
 }

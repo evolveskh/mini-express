@@ -1,56 +1,53 @@
-# mini-express 🚀
+# mini-express
 
-A minimal, high-performance web framework for Node.js built from first principles.
+A minimal, Express.js-like HTTP framework built from first principles — zero runtime dependencies.
 
-> **Note:** This project is built from scratch with zero runtime dependencies to demonstrate deep understanding of Node.js internals, asynchronous programming, and API design.
+## Features
 
-## ✨ Features
+- **Zero dependencies** — pure Node.js `http` module under the hood
+- **TypeScript first** — strict types, generic handler signatures
+- **Express-like API** — familiar `app.get()`, `app.use()`, middleware patterns
+- **Sub-routers** — modular routing with `minExpress.Router()`
+- **Route chaining** — `app.route(path).get(h).post(h)`
+- **Wildcard routes** — `/files/*`, catch-all `*`
+- **Error handling** — 4-argument error middleware, auto-catch of sync throws
+- **Modern ESM** — `import`/`export` throughout
 
-- **Zero Dependencies**: Pure Node.js under the hood.
-- **TypeScript First**: Statically typed for a better developer experience.
-- **Express-like API**: Familiar `app.get()`, `app.use()`, and middleware patterns.
-- **Modern ESM**: Built for the future of the JavaScript ecosystem.
+## Project Progress
 
-## 🛠 Project Progress
+- [x] **Phase 1** — Foundation: HTTP server, request/response wrappers
+- [x] **Phase 2** — Core routing: regex matching, path params
+- [x] **Phase 3** — Middleware pipeline: `next()`, error handlers
+- [x] **Phase 4** — Advanced routing: sub-routers, route chaining, wildcards
+- [ ] **Phase 5** — Body parsing: JSON, URL-encoded
+- [ ] **Phase 6** — Static file serving
+- [ ] **Phase 7** — DX & TypeScript generics
+- [ ] **Phase 8** — Tests & documentation
 
-- [x] **Phase 1.1**: Project Scaffolding & Tooling
-- [x] **Phase 1.2**: Core Application Engine (HTTP Wrapper)
-- [x] **Phase 1.3**: Custom Request & Response Objects
-- [x] **Phase 2**: Routing Engine (Regex matching & Params)
-- [x] **Phase 3**: Middleware Pipeline (The `next()` pattern)
-- [ ] **Phase 4**: Advanced Routing (Sub-routers)
-- [ ] **Phase 5**: Built-in Body Parsing
-- [ ] **Phase 6**: Static File Serving
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js (v18 or higher)
-- npm
-
-### Installation
+## Getting Started
 
 ```bash
 git clone https://github.com/yourusername/mini-express.git
 cd mini-express
-npm install
+bun install
 ```
 
-### Simple Example
+## Usage
+
+### Basic routes & middleware
 
 ```typescript
 import miniExpress from "mini-express";
 
 const app = miniExpress();
 
-// 1. Global Middleware (Runs on every request)
+// Global middleware
 app.use((req, res, next) => {
-  console.log(`[Log] ${req.method} ${req.path}`);
+  console.log(`${req.method} ${req.path}`);
   next();
 });
 
-// 2. Route-Specific Middleware
+// Route with inline middleware
 const requireAuth = (req, res, next) => {
   if (!req.headers.authorization) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -59,33 +56,64 @@ const requireAuth = (req, res, next) => {
 };
 
 app.get("/secret", requireAuth, (req, res) => {
-  res.status(200).json({ message: "You saw the secret!" });
+  res.json({ message: "You saw the secret!" });
 });
 
-// 3. Throwing an error for the Global Error Handler
-app.get("/error", (req, res, next) => {
-  next(new Error("Database connection failed"));
+// Path params
+app.get("/users/:id", (req, res) => {
+  res.json({ id: req.params.id });
 });
 
-// 4. Global Error Handler (4 arguments)
+app.listen(3000, () => console.log("Running on http://localhost:3000"));
+```
+
+### Sub-routers
+
+```typescript
+const usersRouter = miniExpress.Router();
+
+usersRouter.get("/", (req, res) => res.json({ users: [] }));
+usersRouter.get("/:id", (req, res) => res.json({ id: req.params.id }));
+
+app.use("/users", usersRouter);
+// GET /users      → list
+// GET /users/42   → { id: "42" }
+```
+
+### Route chaining
+
+```typescript
+app.route("/items")
+  .get((req, res) => res.json({ items: [] }))
+  .post((req, res) => res.json({ created: true }));
+```
+
+### Wildcard routes
+
+```typescript
+app.get("/files/*", (req, res) => res.json({ path: req.path }));
+app.all("*", (req, res) => res.status(404).json({ error: "Not found" }));
+```
+
+### Error handling
+
+```typescript
+app.get("/boom", (req, res, next) => {
+  next(new Error("something went wrong"));
+});
+
+// 4-argument signature = error handler
 app.use((err, req, res, next) => {
-  console.error("🔥 Caught an error:", err.message);
   res.status(500).json({ error: err.message });
 });
-
-app.listen(3000, () => {
-  console.log("Server running at http://localhost:3000");
-});
 ```
 
-## 🧪 Testing
-
-We use **Vitest** for a fast and reliable testing experience.
+## Testing
 
 ```bash
-npm test
+bun test
 ```
 
-## 📜 License
+## License
 
 MIT

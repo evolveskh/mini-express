@@ -5,7 +5,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 /** Supported HTTP methods */
-export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "HEAD" | "OPTIONS";
+export type HttpMethod =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "DELETE"
+  | "PATCH"
+  | "HEAD"
+  | "OPTIONS";
 
 /** Next function passed to middleware */
 export type NextFunction = (err?: unknown) => void;
